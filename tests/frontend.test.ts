@@ -1015,6 +1015,7 @@ describe('SfxManager Procedural Synthesis & Gating', () => {
           gain: {
             value: 1.0,
             setValueAtTime: vi.fn((val: number) => { gain.gain.value = val; }),
+            linearRampToValueAtTime: vi.fn((val: number) => { gain.gain.value = val; }),
             exponentialRampToValueAtTime: vi.fn((val: number) => { gain.gain.value = val; }),
           },
           connect: vi.fn(),
@@ -1223,6 +1224,36 @@ describe('SfxManager Procedural Synthesis & Gating', () => {
     // Final note pitch bend downwards
     expect(createdOscillators[3].frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(130, 10.0 + 3 * 0.15 + 0.25);
   });
+
+  it('synthesizes CountdownTick SFX (120ms, 440Hz square wave with click-free linear attack)', async () => {
+    const { SfxManager } = await import('../src/audio/SfxManager');
+    const mgr = SfxManager.getInstance();
+    mgr.updateSettings({ sfx_enabled: true, sfx_volume: 50 });
+
+    mgr.play('CountdownTick');
+    expect(createdOscillators.length).toBe(1);
+    expect(createdOscillators[0].type).toBe('square');
+    expect(createdOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(440, 10.0);
+    expect(createdGains.length).toBe(1);
+    expect(createdGains[0].gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 10.0);
+    expect(createdGains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(0.35, 2), 10.0 + 0.005);
+    expect(createdGains[0].gain.exponentialRampToValueAtTime).toHaveBeenCalledWith(0.0001, 10.0 + 0.12);
+  });
+
+  it('synthesizes CountdownGo SFX (400ms, 880Hz square wave fanfare with click-free linear attack)', async () => {
+    const { SfxManager } = await import('../src/audio/SfxManager');
+    const mgr = SfxManager.getInstance();
+    mgr.updateSettings({ sfx_enabled: true, sfx_volume: 50 });
+
+    mgr.play('CountdownGo');
+    expect(createdOscillators.length).toBe(1);
+    expect(createdOscillators[0].type).toBe('square');
+    expect(createdOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(880, 10.0);
+    expect(createdGains.length).toBe(1);
+    expect(createdGains[0].gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 10.0);
+    expect(createdGains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(0.425, 2), 10.0 + 0.008);
+    expect(createdGains[0].gain.exponentialRampToValueAtTime).toHaveBeenCalledWith(0.0001, 10.0 + 0.40);
+  });
 });
 
 describe('AudioQuickControls Component Rendering & Interactions', () => {
@@ -1363,7 +1394,18 @@ describe('End-to-End SFX Event IPC Delivery', () => {
     expect(eventCallback).toBeDefined();
 
     // Trigger each event
-    const allSfx: ('Move' | 'Rotate' | 'Lock' | 'LineClear' | 'Tetris' | 'TSpin' | 'Hold' | 'GameOver')[] = [
+    const allSfx: (
+      | 'Move'
+      | 'Rotate'
+      | 'Lock'
+      | 'LineClear'
+      | 'Tetris'
+      | 'TSpin'
+      | 'Hold'
+      | 'GameOver'
+      | 'CountdownTick'
+      | 'CountdownGo'
+    )[] = [
       'Move',
       'Rotate',
       'Lock',
@@ -1372,6 +1414,8 @@ describe('End-to-End SFX Event IPC Delivery', () => {
       'TSpin',
       'Hold',
       'GameOver',
+      'CountdownTick',
+      'CountdownGo',
     ];
 
     allSfx.forEach((type) => {
@@ -1379,7 +1423,7 @@ describe('End-to-End SFX Event IPC Delivery', () => {
       expect(playSpy).toHaveBeenCalledWith(type);
     });
 
-    expect(playSpy).toHaveBeenCalledTimes(8);
+    expect(playSpy).toHaveBeenCalledTimes(allSfx.length);
   });
 });
 
@@ -1991,5 +2035,186 @@ describe('v1.3.2 SettingsScreen Audio Quick Controls Integration', () => {
     const props = match![1];
     expect(props).toContain('display: flex;');
     expect(props).toContain('align-items: center;');
+  });
+});
+
+describe('v1.3.3 Application & UI Icon Integration', () => {
+  it('validates binary signatures and IHDR dimensions for all Tauri bundle icons', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const iconsDir = path.resolve(__dirname, '../src-tauri/icons');
+
+    const checkPng = (fileName: string, expectedW: number, expectedH: number) => {
+      const fullPath = path.join(iconsDir, fileName);
+      expect(fs.existsSync(fullPath)).toBe(true);
+      const buf = fs.readFileSync(fullPath);
+      // 8-byte PNG signature
+      expect(Array.from(buf.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      // IHDR width and height
+      const width = buf.readUInt32BE(16);
+      const height = buf.readUInt32BE(20);
+      expect(width).toBe(expectedW);
+      expect(height).toBe(expectedH);
+    };
+
+    checkPng('32x32.png', 32, 32);
+    checkPng('128x128.png', 128, 128);
+    checkPng('128x128@2x.png', 256, 256);
+    checkPng('icon.png', 512, 512);
+
+    // icon.ico
+    const icoPath = path.join(iconsDir, 'icon.ico');
+    expect(fs.existsSync(icoPath)).toBe(true);
+    const icoBuf = fs.readFileSync(icoPath);
+    expect(Array.from(icoBuf.subarray(0, 4))).toEqual([0x00, 0x00, 0x01, 0x00]);
+
+    // icon.icns
+    const icnsPath = path.join(iconsDir, 'icon.icns');
+    expect(fs.existsSync(icnsPath)).toBe(true);
+    const icnsBuf = fs.readFileSync(icnsPath);
+    expect(icnsBuf.subarray(0, 4).toString('ascii')).toBe('icns');
+  });
+
+  it('validates public web favicons (PNG 128x128 and ICO format)', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const publicDir = path.resolve(__dirname, '../public');
+
+    // favicon.png: 128x128 PNG
+    const pngPath = path.join(publicDir, 'favicon.png');
+    expect(fs.existsSync(pngPath)).toBe(true);
+    const pngBuf = fs.readFileSync(pngPath);
+    expect(Array.from(pngBuf.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(pngBuf.readUInt32BE(16)).toBe(128);
+    expect(pngBuf.readUInt32BE(20)).toBe(128);
+
+    // favicon.ico: ICO format
+    const icoPath = path.join(publicDir, 'favicon.ico');
+    expect(fs.existsSync(icoPath)).toBe(true);
+    const icoBuf = fs.readFileSync(icoPath);
+    expect(Array.from(icoBuf.subarray(0, 4))).toEqual([0x00, 0x00, 0x01, 0x00]);
+  });
+
+  it('validates index.html icon links and page title', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const htmlPath = path.resolve(__dirname, '../index.html');
+    const html = fs.readFileSync(htmlPath, 'utf-8');
+
+    expect(html).toContain('<link rel="icon" type="image/x-icon" href="/favicon.ico" />');
+    expect(html).toContain('<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />');
+    expect(html).toContain('<title>Falling Blocks</title>');
+  });
+
+  it('renders game-title-icon on TitleScreen', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { LanguageProvider } = await import('../src/i18n');
+    const { TitleScreen } = await import('../src/screens/TitleScreen');
+
+    const html = renderToStaticMarkup(
+      React.createElement(
+        LanguageProvider,
+        { initialLanguage: 'ja' },
+        React.createElement(TitleScreen, {
+          onStartGame: vi.fn(),
+          onOpenSettings: vi.fn(),
+          onOpenRecords: vi.fn(),
+        })
+      )
+    );
+
+    expect(html).toContain('class="game-title-icon"');
+    expect(html).toContain('src="/favicon.png"');
+    expect(html).toContain('alt="Falling Blocks"');
+
+    // Verify logo appears directly before game-title in DOM hierarchy
+    const iconIndex = html.indexOf('class="game-title-icon"');
+    const titleIndex = html.indexOf('class="game-title"');
+    expect(iconIndex).toBeGreaterThan(-1);
+    expect(titleIndex).toBeGreaterThan(-1);
+    expect(iconIndex).toBeLessThan(titleIndex);
+  });
+
+  it('verifies game-title-icon and icon-float styling in main.css', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const cssPath = path.resolve(__dirname, '../src/styles/main.css');
+    const css = fs.readFileSync(cssPath, 'utf-8');
+
+    expect(css).toContain('.game-title-icon');
+    expect(css).toContain('@keyframes icon-float');
+    expect(css).toMatch(/animation:\s*icon-float/);
+  });
+
+  it('validates Tauri NSIS installer configuration for multi-language and 3 icon locations', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const tauriConfPath = path.resolve(__dirname, '../src-tauri/tauri.conf.json');
+    const conf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf-8'));
+
+    // 1. Bundle target is NSIS
+    expect(conf.bundle.active).toBe(true);
+    expect(conf.bundle.targets).toEqual(['nsis']);
+
+    // 2. Location 1: Application executable icon
+    expect(conf.bundle.icon).toContain('icons/icon.ico');
+
+    // 3. Location 2: Installer icon
+    expect(conf.bundle.windows?.nsis?.installerIcon).toBe('icons/icon.ico');
+
+    // 4. Location 3: Uninstaller icon
+    expect(conf.bundle.windows?.nsis?.uninstallerIcon).toBe('icons/icon.ico');
+
+    // 5. Bilingual English and Japanese support
+    expect(conf.bundle.windows?.nsis?.languages).toContain('English');
+    expect(conf.bundle.windows?.nsis?.languages).toContain('Japanese');
+
+    // 6. Language selector enabled at startup
+    expect(conf.bundle.windows?.nsis?.displayLanguageSelector).toBe(true);
+  });
+
+  it('validates physical assets for icon and NSIS installer/uninstaller paths', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const rootDir = path.resolve(__dirname, '..');
+    const srcTauriDir = path.resolve(rootDir, 'src-tauri');
+
+    // 1. Source PNG icon validation
+    const sourcePngPath = path.resolve(rootDir, 'icon/Tetris-icon.png');
+    expect(fs.existsSync(sourcePngPath)).toBe(true);
+    const pngBuf = fs.readFileSync(sourcePngPath);
+    expect(Array.from(pngBuf.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(pngBuf.readUInt32BE(16)).toBe(1254);
+    expect(pngBuf.readUInt32BE(20)).toBe(1254);
+    expect(pngBuf.readUInt8(24)).toBe(8); // Bit depth
+    expect(pngBuf.readUInt8(25)).toBe(6); // Color type 6 (RGBA)
+
+    // 2. Bundled Windows ICO validation
+    const icoPath = path.resolve(srcTauriDir, 'icons/icon.ico');
+    expect(fs.existsSync(icoPath)).toBe(true);
+    const icoBuf = fs.readFileSync(icoPath);
+    expect(Array.from(icoBuf.subarray(0, 4))).toEqual([0x00, 0x00, 0x01, 0x00]);
+    const entryCount = icoBuf.readUInt16LE(4);
+    expect(entryCount).toBe(6);
+
+    const layerSizes: number[] = [];
+    for (let i = 0; i < entryCount; i++) {
+      const offset = 6 + i * 16;
+      let w = icoBuf.readUInt8(offset);
+      let h = icoBuf.readUInt8(offset + 1);
+      if (w === 0) w = 256;
+      if (h === 0) h = 256;
+      expect(w).toBe(h);
+      layerSizes.push(w);
+    }
+    expect(layerSizes).toEqual([16, 24, 32, 48, 64, 256]);
+
+    // 3. Confirm installer and uninstaller icon targets resolve to existing files
+    const tauriConf = JSON.parse(fs.readFileSync(path.resolve(srcTauriDir, 'tauri.conf.json'), 'utf-8'));
+    const installerIconPath = path.resolve(srcTauriDir, tauriConf.bundle.windows.nsis.installerIcon);
+    const uninstallerIconPath = path.resolve(srcTauriDir, tauriConf.bundle.windows.nsis.uninstallerIcon);
+    expect(fs.existsSync(installerIconPath)).toBe(true);
+    expect(fs.existsSync(uninstallerIconPath)).toBe(true);
   });
 });

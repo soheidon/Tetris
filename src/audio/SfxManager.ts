@@ -25,7 +25,9 @@ export type SfxType =
   | 'Tetris'
   | 'TSpin'
   | 'Hold'
-  | 'GameOver';
+  | 'GameOver'
+  | 'CountdownTick'
+  | 'CountdownGo';
 
 export interface SfxSettings {
   sfx_enabled: boolean;
@@ -143,6 +145,12 @@ export class SfxManager {
         break;
       case 'GameOver':
         this.playGameOver(ctx, now, masterVol);
+        break;
+      case 'CountdownTick':
+        this.playCountdownTick(ctx, now, masterVol);
+        break;
+      case 'CountdownGo':
+        this.playCountdownGo(ctx, now, masterVol);
         break;
     }
   }
@@ -371,6 +379,48 @@ export class SfxManager {
       osc.start(noteTime);
       osc.stop(noteTime + sustain + 0.01);
     });
+  }
+
+  /** 9. CountdownTick: Low/Mid race countdown signal (120ms, 440Hz square wave) */
+  private playCountdownTick(ctx: AudioContext, now: number, masterVol: number): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(440, now);
+
+    const targetGain = 0.7 * masterVol;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(targetGain, now + 0.005);
+    gain.gain.setValueAtTime(targetGain, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.125);
+  }
+
+  /** 10. CountdownGo: High triumphant race start signal (400ms, 880Hz square wave) */
+  private playCountdownGo(ctx: AudioContext, now: number, masterVol: number): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now);
+
+    const targetGain = 0.85 * masterVol;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(targetGain, now + 0.008);
+    gain.gain.setValueAtTime(targetGain, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.40);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.405);
   }
 
   /**

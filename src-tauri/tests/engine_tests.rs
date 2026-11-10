@@ -952,3 +952,57 @@ fn test_sfx_emission_via_tick_and_input() {
     assert_eq!(sfx, vec![SfxType::Move], "ARR repeat must generate SfxType::Move in tick");
 }
 
+#[test]
+fn test_countdown_sfx_emission_and_snapshot_sync() {
+    let mut engine = GameEngine::new(GameMode::Marathon, 1, Some(42));
+    assert_eq!(engine.status, GameStatus::Title);
+    assert_eq!(engine.snapshot().countdown_seconds, None);
+
+    // 1. Start game (tick 0): remaining = 180, display = 3, queues CountdownTick
+    engine.start();
+    assert_eq!(engine.status, GameStatus::Ready);
+    assert_eq!(engine.ready_ticks_remaining, 180);
+    assert_eq!(engine.snapshot().countdown_seconds, Some(3));
+    assert_eq!(engine.drain_sfx(), vec![SfxType::CountdownTick]);
+
+    // 2. Ticks 1..59: countdown remains 3, no additional SFX
+    for _ in 1..60 {
+        engine.tick();
+        assert_eq!(engine.snapshot().countdown_seconds, Some(3));
+        assert!(engine.drain_sfx().is_empty());
+    }
+
+    // 3. Tick 60: remaining becomes 120, display transitions to 2, queues CountdownTick
+    engine.tick();
+    assert_eq!(engine.ready_ticks_remaining, 120);
+    assert_eq!(engine.snapshot().countdown_seconds, Some(2));
+    assert_eq!(engine.drain_sfx(), vec![SfxType::CountdownTick]);
+
+    // 4. Ticks 61..119: countdown remains 2, no additional SFX
+    for _ in 61..120 {
+        engine.tick();
+        assert_eq!(engine.snapshot().countdown_seconds, Some(2));
+        assert!(engine.drain_sfx().is_empty());
+    }
+
+    // 5. Tick 120: remaining becomes 60, display transitions to 1, queues CountdownTick
+    engine.tick();
+    assert_eq!(engine.ready_ticks_remaining, 60);
+    assert_eq!(engine.snapshot().countdown_seconds, Some(1));
+    assert_eq!(engine.drain_sfx(), vec![SfxType::CountdownTick]);
+
+    // 6. Ticks 121..179: countdown remains 1, no additional SFX
+    for _ in 121..180 {
+        engine.tick();
+        assert_eq!(engine.snapshot().countdown_seconds, Some(1));
+        assert!(engine.drain_sfx().is_empty());
+    }
+
+    // 7. Tick 180: remaining becomes 0, status transitions to Playing, display is None, queues CountdownGo
+    engine.tick();
+    assert_eq!(engine.ready_ticks_remaining, 0);
+    assert_eq!(engine.status, GameStatus::Playing);
+    assert_eq!(engine.snapshot().countdown_seconds, None);
+    assert_eq!(engine.drain_sfx(), vec![SfxType::CountdownGo]);
+}
+

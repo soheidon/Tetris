@@ -28,6 +28,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       </div>
 
       <div className="title-container">
+        <img src="/favicon.png" alt="Falling Blocks" className="game-title-icon" />
         <h1 className="game-title">
           FALLING <span className="title-accent">{t.title.accent}</span>
         </h1>

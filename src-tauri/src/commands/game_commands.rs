@@ -31,6 +31,9 @@ pub fn start_game(
         settings.soft_drop_multiplier,
     ));
     engine.start();
+    for ev in engine.drain_sfx() {
+        let _ = app.emit("game_sfx", ev);
+    }
 
     Ok(engine.snapshot())
 }
@@ -49,6 +52,9 @@ pub fn restart_game(
     let settings = UserSettings::load_or_default(&settings_path);
 
     engine.restart();
+    for ev in engine.drain_sfx() {
+        let _ = app.emit("game_sfx", ev);
+    }
     engine.set_movement_config(MovementConfig::from_ms(
         settings.das_ms,
         settings.arr_ms,

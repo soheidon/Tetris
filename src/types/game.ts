@@ -69,3 +69,5 @@ export interface GameStateSnapshot {
   last_action: ActionNotification | null;
   stats: GameStatistics | null;
 }
+
+export type { SfxType } from '../audio/SfxManager';

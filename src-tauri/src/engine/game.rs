@@ -25,6 +25,8 @@ pub enum SfxType {
     TSpin,
     Hold,
     GameOver,
+    CountdownTick,
+    CountdownGo,
 }
 
 #[derive(Clone, Debug)]
@@ -100,6 +102,7 @@ impl GameEngine {
         self.last_notification = None;
         self.stats = None;
         self.sfx_queue.clear();
+        self.sfx_queue.push(SfxType::CountdownTick);
         self.spawn_next_piece();
     }
 
@@ -559,8 +562,13 @@ impl GameEngine {
                 if self.ready_ticks_remaining > 0 {
                     self.ready_ticks_remaining -= 1;
                 }
-                if self.ready_ticks_remaining == 0 {
+                if self.ready_ticks_remaining == 120 {
+                    self.sfx_queue.push(SfxType::CountdownTick);
+                } else if self.ready_ticks_remaining == 60 {
+                    self.sfx_queue.push(SfxType::CountdownTick);
+                } else if self.ready_ticks_remaining == 0 {
                     self.status = GameStatus::Playing;
+                    self.sfx_queue.push(SfxType::CountdownGo);
                 }
             }
             GameStatus::Playing => {
@@ -635,8 +643,8 @@ impl GameEngine {
 
     /// Produces snapshot DTO for UI rendering
     pub fn snapshot(&self) -> GameStateSnapshot {
-        let countdown = if self.status == GameStatus::Ready {
-            Some((self.ready_ticks_remaining / 60) + 1)
+        let countdown = if self.status == GameStatus::Ready && self.ready_ticks_remaining > 0 {
+            Some(((self.ready_ticks_remaining - 1) / 60) + 1)
         } else {
             None
         };

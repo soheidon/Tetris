@@ -15,7 +15,7 @@ interface AudioQuickControlsProps {
 const DEFAULT_SETTINGS_FALLBACK: UserSettings = {
   schema_version: 1,
   window_width: 800,
-  window_height: 600,
+  window_height: 720,
   fullscreen: false,
   show_ghost: true,
   show_grid: true,
